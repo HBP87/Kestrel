@@ -5,9 +5,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
- * Reads RESP values from a stream. Currently supports simple strings and bulk strings.
+ * Reads RESP values from a stream. Currently supports simple strings, bulk strings and arrays.
  */
 public class RespParser {
     private final InputStream in;
@@ -27,6 +29,7 @@ public class RespParser {
         return switch (type) {
             case '+' -> new RespValue.SimpleString(new String(readLine(), StandardCharsets.UTF_8));
             case '$' -> readBulkString();
+            case '*' -> readArray();
             default -> throw new RespParseException("Unknown RESP type: '" + (char) type + "'");
         };
     }
@@ -51,6 +54,28 @@ public class RespParser {
         }
         expectCrlf();
         return new RespValue.BulkString(data);
+    }
+
+    private RespValue.Array readArray() throws IOException {
+        String countLine = new String(readLine(), StandardCharsets.US_ASCII);
+        int count;
+        try {
+            count = Integer.parseInt(countLine);
+        } catch (NumberFormatException e) {
+            throw new RespParseException("Invalid array length: " + countLine);
+        }
+        if (count < 0) {
+            throw new RespParseException("Invalid array length: " + count);
+        }
+        List<RespValue> elements = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            RespValue element = read();
+            if (element == null) {
+                throw new RespParseException("Unexpected end of stream in array");
+            }
+            elements.add(element);
+        }
+        return new RespValue.Array(elements);
     }
 
     private byte[] readLine() throws IOException {

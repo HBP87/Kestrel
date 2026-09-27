@@ -4,9 +4,11 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import org.rashid.resp.*;
 
@@ -20,35 +22,25 @@ public class Kestrel {
 
     public void run() {
         log.info("Starting kestrel server");
-        ServerSocket serverSocket = null;
-        Socket clientSocket = null;
         int port = 6380;
 
-        try {
-            serverSocket = new ServerSocket(port);
+        try (ServerSocket serverSocket = new ServerSocket();
+             ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor()) {
             serverSocket.setReuseAddress(true);
+            serverSocket.bind(new InetSocketAddress(port));
             log.info("Listening on port: {}", port);
             while (true) {
-                clientSocket = serverSocket.accept();
-                Socket cs = clientSocket;
-                CompletableFuture.runAsync(() -> {
-                    try {
-                        handleClient(cs);
+                Socket clientSocket = serverSocket.accept();
+                executor.submit(() -> {
+                    try (clientSocket) {
+                        handleClient(clientSocket);
                     } catch (Exception e) {
-                        throw new RuntimeException(e);
+                        log.error("Error handling client {}", clientSocket.getRemoteSocketAddress(), e);
                     }
                 });
             }
         } catch (IOException e) {
             log.error("IOException", e);
-        } finally {
-            try {
-                if (clientSocket != null) {
-                    clientSocket.close();
-                }
-            } catch (IOException e) {
-                log.error("IOException", e);
-            }
         }
     }
 
@@ -57,6 +49,7 @@ public class Kestrel {
         OutputStream out = clientSocket.getOutputStream();
         RespValue value;
         while ((value = parser.read()) != null) {
+            log.info("Client sent: {}", value);
             RespEncoder.write(out, new RespValue.SimpleString("PONG"));
         }
     }

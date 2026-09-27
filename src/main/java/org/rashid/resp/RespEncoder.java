@@ -27,6 +27,14 @@ public final class RespEncoder {
                 out.writeBytes(b.value());
                 out.writeBytes(CRLF);
             }
+            case RespValue.Array a -> {
+                out.write('*');
+                out.writeBytes(Integer.toString(a.elements().size()).getBytes(StandardCharsets.US_ASCII));
+                out.writeBytes(CRLF);
+                for (RespValue element : a.elements()) {
+                    out.writeBytes(encode(element));
+                }
+            }
         }
         return out.toByteArray();
     }

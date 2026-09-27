@@ -2,8 +2,9 @@ package org.rashid.resp;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.List;
 
-public sealed interface RespValue permits RespValue.SimpleString, RespValue.BulkString {
+public sealed interface RespValue permits RespValue.SimpleString, RespValue.BulkString, RespValue.Array {
 
     record SimpleString(String value) implements RespValue {
         public SimpleString {
@@ -47,6 +48,15 @@ public sealed interface RespValue permits RespValue.SimpleString, RespValue.Bulk
         @Override
         public String toString() {
             return "BulkString[" + asString() + "]";
+        }
+    }
+
+    record Array(List<RespValue> elements) implements RespValue {
+        public Array {
+            if (elements == null) {
+                throw new IllegalArgumentException("Array elements cannot be null");
+            }
+            elements = List.copyOf(elements);
         }
     }
 }
