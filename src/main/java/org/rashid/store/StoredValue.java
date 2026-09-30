@@ -4,7 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
 /**
- * A value held in the keyspace. New data types (lists, hashes, ...) are added as further permitted records.
+ * A value held in the keyspace.
  */
 public sealed interface StoredValue permits StoredValue.StringValue {
 

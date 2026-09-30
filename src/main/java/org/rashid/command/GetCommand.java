@@ -21,7 +21,7 @@ public class GetCommand implements Command {
 
     @Override
     public int arity() {
-        return 2; //fixed two tokens
+        return 2;
     }
 
     @Override
