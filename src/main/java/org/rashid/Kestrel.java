@@ -7,6 +7,7 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -49,8 +50,27 @@ public class Kestrel {
         OutputStream out = clientSocket.getOutputStream();
         RespValue value;
         while ((value = parser.read()) != null) {
-            log.info("Client sent: {}", value);
-            RespEncoder.write(out, new RespValue.SimpleString("PONG"));
+            List<String> tokens = value.toTokens();
+            log.info("Client sent: {}", tokens);
+            if (tokens.isEmpty()) {
+                RespEncoder.write(out, new RespValue.SimpleString("ERR empty command"));
+                continue;
+            }
+            String command = tokens.getFirst().toUpperCase();
+            switch (command) {
+                case "PING" -> RespEncoder.write(out, new RespValue.SimpleString("PONG"));
+                case "ECHO" -> handleEchoCommand(tokens, out);
+                default ->
+                        RespEncoder.write(out, new RespValue.SimpleString("ERR unknown command '" + tokens.getFirst() + "'"));
+            }
+        }
+    }
+
+    private static void handleEchoCommand(List<String> tokens, OutputStream out) throws IOException {
+        if (tokens.size() != 2) {
+            RespEncoder.write(out, new RespValue.SimpleString("ERR wrong number of arguments for 'echo' command"));
+        } else {
+            RespEncoder.write(out, RespValue.BulkString.of(tokens.get(1)));
         }
     }
 }
