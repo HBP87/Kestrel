@@ -7,14 +7,29 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import org.rashid.command.*;
 import org.rashid.resp.*;
+import org.rashid.store.InMemoryKeyspace;
+import org.rashid.store.Keyspace;
 
 @Slf4j
 public class Kestrel {
+    private final CommandDispatcher dispatcher;
+
+    public Kestrel() {
+        Keyspace keyspace = new InMemoryKeyspace();
+        this.dispatcher = new CommandDispatcher(List.of(
+                new PingCommand(),
+                new EchoCommand(),
+                new GetCommand(keyspace),
+                new SetCommand(keyspace)
+        ));
+    }
 
     public static void main(String[] args) {
         Kestrel kestrel = new Kestrel();
@@ -50,27 +65,11 @@ public class Kestrel {
         OutputStream out = clientSocket.getOutputStream();
         RespValue value;
         while ((value = parser.read()) != null) {
-            List<String> tokens = value.toTokens();
-            log.info("Client sent: {}", tokens);
-            if (tokens.isEmpty()) {
-                RespEncoder.write(out, new RespValue.SimpleString("ERR empty command"));
-                continue;
+            List<byte[]> args = value.toArgs();
+            if (log.isDebugEnabled()) {
+                log.debug("Client sent: {}", args.stream().map(a -> new String(a, StandardCharsets.UTF_8)).toList());
             }
-            String command = tokens.getFirst().toUpperCase();
-            switch (command) {
-                case "PING" -> RespEncoder.write(out, new RespValue.SimpleString("PONG"));
-                case "ECHO" -> handleEchoCommand(tokens, out);
-                default ->
-                        RespEncoder.write(out, new RespValue.SimpleString("ERR unknown command '" + tokens.getFirst() + "'"));
-            }
-        }
-    }
-
-    private static void handleEchoCommand(List<String> tokens, OutputStream out) throws IOException {
-        if (tokens.size() != 2) {
-            RespEncoder.write(out, new RespValue.SimpleString("ERR wrong number of arguments for 'echo' command"));
-        } else {
-            RespEncoder.write(out, RespValue.BulkString.of(tokens.get(1)));
+            RespEncoder.write(out, dispatcher.dispatch(args));
         }
     }
 }

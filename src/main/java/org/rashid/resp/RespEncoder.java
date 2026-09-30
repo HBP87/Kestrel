@@ -19,6 +19,11 @@ public final class RespEncoder {
                 out.writeBytes(s.value().getBytes(StandardCharsets.UTF_8));
                 out.writeBytes(CRLF);
             }
+            case RespValue.Error e -> {
+                out.write('-');
+                out.writeBytes(e.message().getBytes(StandardCharsets.UTF_8));
+                out.writeBytes(CRLF);
+            }
             case RespValue.BulkString b when b.isNull() -> out.writeBytes("$-1\r\n".getBytes(StandardCharsets.US_ASCII));
             case RespValue.BulkString b -> {
                 out.write('$');

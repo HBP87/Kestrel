@@ -5,12 +5,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-public sealed interface RespValue permits RespValue.SimpleString, RespValue.BulkString, RespValue.Array {
+public sealed interface RespValue permits RespValue.SimpleString, RespValue.Error, RespValue.BulkString, RespValue.Array {
 
     /**
-     * Returns this value as a flat list of string tokens, e.g. {@code ["ECHO", "Hey"]} for a command array.
+     * Returns this value as a flat, binary-safe argument list, e.g. {@code ["SET", "foo", "bar"]} for a command array.
      */
-    List<String> toTokens() throws RespParseException;
+    List<byte[]> toArgs() throws RespParseException;
 
     record SimpleString(String value) implements RespValue {
         public SimpleString {
@@ -23,8 +23,27 @@ public sealed interface RespValue permits RespValue.SimpleString, RespValue.Bulk
         }
 
         @Override
-        public List<String> toTokens() {
-            return List.of(value);
+        public List<byte[]> toArgs() {
+            return List.of(value.getBytes(StandardCharsets.UTF_8));
+        }
+    }
+
+    /**
+     * A RESP simple error, e.g. {@code -ERR unknown command}. Only ever sent to clients, never parsed as a command.
+     */
+    record Error(String message) implements RespValue {
+        public Error {
+            if (message == null) {
+                throw new IllegalArgumentException("Error message cannot be null");
+            }
+            if (message.indexOf('\r') >= 0 || message.indexOf('\n') >= 0) {
+                throw new IllegalArgumentException("Error message cannot contain CR or LF");
+            }
+        }
+
+        @Override
+        public List<byte[]> toArgs() throws RespParseException {
+            throw new RespParseException("Error cannot be a command argument");
         }
     }
 
@@ -47,11 +66,11 @@ public sealed interface RespValue permits RespValue.SimpleString, RespValue.Bulk
         }
 
         @Override
-        public List<String> toTokens() throws RespParseException {
+        public List<byte[]> toArgs() throws RespParseException {
             if (isNull()) {
-                throw new RespParseException("Null bulk string cannot be a token");
+                throw new RespParseException("Null bulk string cannot be a command argument");
             }
-            return List.of(asString());
+            return List.of(value);
         }
 
         @Override
@@ -79,15 +98,15 @@ public sealed interface RespValue permits RespValue.SimpleString, RespValue.Bulk
         }
 
         @Override
-        public List<String> toTokens() throws RespParseException {
-            List<String> tokens = new ArrayList<>(elements.size());
+        public List<byte[]> toArgs() throws RespParseException {
+            List<byte[]> args = new ArrayList<>(elements.size());
             for (RespValue element : elements) {
                 if (element instanceof Array) {
-                    throw new RespParseException("Nested arrays cannot be tokens");
+                    throw new RespParseException("Nested arrays cannot be command arguments");
                 }
-                tokens.addAll(element.toTokens());
+                args.addAll(element.toArgs());
             }
-            return tokens;
+            return args;
         }
     }
 }
